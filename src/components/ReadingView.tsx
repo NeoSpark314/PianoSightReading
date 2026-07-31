@@ -23,6 +23,7 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
 }) => {
   const osmdContainerRef = useRef<HTMLDivElement>(null);
   const osmdInstanceRef = useRef<OpenSheetMusicDisplay | null>(null);
+  const isNavigatingRef = useRef<boolean>(false);
   
   const [isPlaying, setIsPlaying] = useState(false);
   const [leftTouchFlash, setLeftTouchFlash] = useState(false);
@@ -57,37 +58,39 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
 
     osmdInstanceRef.current = osmd;
 
-    // Render and auto-fit zoom scaling so entire piece fits vertically on screen
-    const renderAndFit = () => {
-      if (!osmdContainerRef.current || !osmdInstanceRef.current) return;
-      
+    // Calculate optimal zoom factor BEFORE rendering to achieve a 1-pass fast render on tablets
+    const renderWithOptimalZoom = () => {
+      if (!osmdInstanceRef.current) return;
       const instance = osmdInstanceRef.current;
-      instance.zoom = 1.0;
-      instance.render();
 
-      const container = osmdContainerRef.current;
-      const svg = container.querySelector('svg');
-      const renderedHeight = svg ? svg.getBoundingClientRect().height : container.scrollHeight;
+      const totalMeasures = currentPieceResult.piece.measures.length;
+      const systemCount = Math.ceil(totalMeasures / 4);
       
-      // Calculate available height below top floating overlay bar
+      // Estimated height per grand staff system + margins
+      const estimatedHeight = systemCount * 170 + 90;
       const availableHeight = window.innerHeight - 90;
 
-      if (renderedHeight > availableHeight && renderedHeight > 0) {
-        const targetZoom = Math.max(0.42, (availableHeight / renderedHeight) * 0.96);
-        instance.zoom = targetZoom;
-        instance.render();
+      let optimalZoom = 1.0;
+      if (estimatedHeight > availableHeight && estimatedHeight > 0) {
+        optimalZoom = Math.max(0.42, Math.min(1.0, (availableHeight / estimatedHeight) * 0.98));
       }
+
+      instance.zoom = optimalZoom;
+      instance.render(); // Single fast render pass!
     };
 
     osmd.load(currentPieceResult.musicXml).then(() => {
-      renderAndFit();
+      renderWithOptimalZoom();
+      // Unlock navigation after rendering completes
+      isNavigatingRef.current = false;
     }).catch(err => {
       console.error('Error rendering MusicXML in OSMD:', err);
+      isNavigatingRef.current = false;
     });
 
     // Resize listener for orientation change & window resize
     const handleResize = () => {
-      renderAndFit();
+      renderWithOptimalZoom();
     };
 
     window.addEventListener('resize', handleResize);
@@ -125,6 +128,10 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
   }, [historyIndex, historyCount]);
 
   const triggerLeftAction = () => {
+    // Debounce guard to prevent double-firing touch/click events on tablet
+    if (isNavigatingRef.current) return;
+    isNavigatingRef.current = true;
+
     setLeftTouchFlash(true);
     setTimeout(() => setLeftTouchFlash(false), 200);
     audioSynth.stop();
@@ -133,6 +140,10 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
   };
 
   const triggerRightAction = () => {
+    // Debounce guard to prevent double-firing touch/click events on tablet
+    if (isNavigatingRef.current) return;
+    isNavigatingRef.current = true;
+
     setRightTouchFlash(true);
     setTimeout(() => setRightTouchFlash(false), 200);
     audioSynth.stop();
