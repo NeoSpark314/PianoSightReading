@@ -1,5 +1,5 @@
 import React from 'react';
-import { GenerationConfig, StyleType, KeyCenter } from '../engine/types';
+import { GenerationConfig, StyleType, KeyCenter, LengthOption } from '../engine/types';
 import { Music, Play, Sparkles, BookOpen, Layers } from 'lucide-react';
 
 interface SettingsScreenProps {
@@ -21,7 +21,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
     onChangeConfig({ ...config, keyCenter: e.target.value as KeyCenter });
   };
 
-  const handleLengthChange = (length: 8 | 16 | 32) => {
+  const handleLengthChange = (length: LengthOption) => {
     onChangeConfig({ ...config, length });
   };
 
@@ -92,6 +92,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             onChange={handleStyleChange}
             className="custom-select"
           >
+            <option value="random">🎲 Surprise Me (Random Style)</option>
             <option value="alberti">Classical (Alberti Bass 8ths)</option>
             <option value="waltz">Waltz (3/4 Lyrical Bass & Chords)</option>
             <option value="chorale">Chorale (4/4 Smooth Voice Leading)</option>
@@ -117,13 +118,13 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             onChange={handleKeyChange}
             className="custom-select"
           >
+            <option value="random">🎲 Surprise Me (Random Key)</option>
             <option value="C">C Major (No sharps/flats)</option>
             <option value="Am">A Minor (No sharps/flats)</option>
             <option value="G">G Major (1 Sharp - F#)</option>
             <option value="Em">E Minor (1 Sharp - F#)</option>
             <option value="F">F Major (1 Flat - Bb)</option>
             <option value="Dm">D Minor (1 Flat - Bb)</option>
-            <option value="random">🎲 Randomize Key</option>
           </select>
         </div>
 
@@ -142,16 +143,16 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           </label>
           <div style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(3, 1fr)',
-            gap: '0.75rem'
+            gridTemplateColumns: 'repeat(4, 1fr)',
+            gap: '0.5rem'
           }}>
-            {[8, 16, 32].map((len) => (
+            {(['random', 8, 16, 32] as LengthOption[]).map((len) => (
               <button
-                key={len}
+                key={String(len)}
                 type="button"
-                onClick={() => handleLengthChange(len as 8 | 16 | 32)}
+                onClick={() => handleLengthChange(len)}
                 style={{
-                  padding: '0.75rem',
+                  padding: '0.75rem 0.25rem',
                   borderRadius: '0.75rem',
                   border: config.length === len 
                     ? '2px solid #6366f1' 
@@ -161,12 +162,12 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                     : 'rgba(15, 23, 42, 0.5)',
                   color: config.length === len ? '#ffffff' : 'var(--text-muted)',
                   fontWeight: 600,
-                  fontSize: '0.95rem',
+                  fontSize: '0.85rem',
                   cursor: 'pointer',
                   transition: 'all 0.15s ease'
                 }}
               >
-                {len} Bars
+                {len === 'random' ? '🎲 Random' : `${len} Bars`}
               </button>
             ))}
           </div>

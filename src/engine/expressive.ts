@@ -7,7 +7,7 @@ export function applyExpressiveMarkers(
   const totalMeasures = measures.length;
 
   // Tempo markings based on style
-  const tempoTexts: Record<StyleType, string> = {
+  const tempoTexts: Record<string, string> = {
     alberti: 'Allegretto',
     waltz: 'Tempo di Valse',
     chorale: 'Andante religioso',

@@ -1,6 +1,8 @@
-export type StyleType = 'alberti' | 'waltz' | 'chorale' | 'pop';
+export type StyleType = 'alberti' | 'waltz' | 'chorale' | 'pop' | 'random';
 
 export type KeyCenter = 'C' | 'Am' | 'G' | 'Em' | 'F' | 'Dm' | 'random';
+
+export type LengthOption = 8 | 16 | 32 | 'random';
 
 export type TimeSignature = {
   beats: number;
@@ -65,7 +67,7 @@ export interface MeasureData {
 export interface GenerationConfig {
   style: StyleType;
   keyCenter: KeyCenter;
-  length: 8 | 16 | 32;
+  length: LengthOption;
   tempo?: number;
   title?: string;
 }

@@ -1,4 +1,4 @@
-import { GenerationConfig, MusicPiece, MeasureData, TimeSignature, NoteDuration } from './types';
+import { GenerationConfig, MusicPiece, MeasureData, TimeSignature, NoteDuration, StyleType, KeyCenter } from './types';
 import { KEYS_MAP } from './pitchUtils';
 import { generateHarmonicProgression } from './harmonics';
 import { generateLeftHandMeasure } from './leftHand';
@@ -12,22 +12,36 @@ export interface GeneratedResult {
 }
 
 export function generateSightReadingPiece(config: GenerationConfig): GeneratedResult {
-  // Resolve key center if set to random
+  // Resolve random style
+  let style = config.style;
+  if (style === 'random') {
+    const availableStyles: StyleType[] = ['alberti', 'waltz', 'chorale', 'pop'];
+    style = availableStyles[Math.floor(Math.random() * availableStyles.length)];
+  }
+
+  // Resolve random key center
   let keyKey = config.keyCenter;
   if (keyKey === 'random') {
-    const keys = ['C', 'Am', 'G', 'Em', 'F', 'Dm'];
-    keyKey = keys[Math.floor(Math.random() * keys.length)] as any;
+    const keys: KeyCenter[] = ['C', 'Am', 'G', 'Em', 'F', 'Dm'];
+    keyKey = keys[Math.floor(Math.random() * keys.length)];
+  }
+
+  // Resolve random length
+  let length: 8 | 16 | 32 = config.length === 'random' ? 8 : config.length;
+  if (config.length === 'random') {
+    const lengths: (8 | 16 | 32)[] = [8, 16, 32];
+    length = lengths[Math.floor(Math.random() * lengths.length)];
   }
 
   const keyInfo = KEYS_MAP[keyKey] || KEYS_MAP['C'];
 
   // Time Signature based on style
-  const timeSignature: TimeSignature = config.style === 'waltz' 
+  const timeSignature: TimeSignature = style === 'waltz' 
     ? { beats: 3, beatType: 4, name: '3/4' } 
     : { beats: 4, beatType: 4, name: '4/4' };
 
   // Phase 1: Harmonic Backbone
-  const harmonicProgression = generateHarmonicProgression(keyKey, config.length);
+  const harmonicProgression = generateHarmonicProgression(keyKey, length);
 
   // Phase 2 & 3: LH & RH note generation measure by measure
   const rawMeasures: MeasureData[] = [];
@@ -41,13 +55,13 @@ export function generateSightReadingPiece(config: GenerationConfig): GeneratedRe
 
     // Select a fresh rhythmic motif for every 4-bar phrase
     if (phrasePos === 0) {
-      activePhraseMotif = selectPhraseMotif(config.style);
+      activePhraseMotif = selectPhraseMotif(style);
     }
 
-    const bassNotes = generateLeftHandMeasure(hMeasure, config.style, isFinal);
+    const bassNotes = generateLeftHandMeasure(hMeasure, style, isFinal);
     const trebleNotes = generateRightHandMeasure(
       hMeasure,
-      config.style,
+      style,
       keyKey,
       prevTrebleNote,
       isFinal,
@@ -67,7 +81,7 @@ export function generateSightReadingPiece(config: GenerationConfig): GeneratedRe
   }
 
   // Phase 4: Expressive Markers
-  const expressiveMeasures = applyExpressiveMarkers(rawMeasures, config.style);
+  const expressiveMeasures = applyExpressiveMarkers(rawMeasures, style);
 
   // Title generation
   const styleNames: Record<string, string> = {
@@ -77,7 +91,7 @@ export function generateSightReadingPiece(config: GenerationConfig): GeneratedRe
     pop: 'Syncopated Modern Etude'
   };
 
-  const title = config.title || `${styleNames[config.style]} in ${keyInfo.name}`;
+  const title = config.title || `${styleNames[style]} in ${keyInfo.name}`;
 
   const piece: MusicPiece = {
     title,
@@ -86,8 +100,8 @@ export function generateSightReadingPiece(config: GenerationConfig): GeneratedRe
     keyFifths: keyInfo.fifths,
     isMinor: keyInfo.isMinor,
     timeSignature,
-    tempo: config.style === 'chorale' ? 72 : config.style === 'alberti' ? 108 : 120,
-    tempoText: config.style === 'chorale' ? 'Andante' : 'Allegretto',
+    tempo: style === 'chorale' ? 72 : style === 'alberti' ? 108 : 120,
+    tempoText: style === 'chorale' ? 'Andante' : 'Allegretto',
     measures: expressiveMeasures
   };
 
