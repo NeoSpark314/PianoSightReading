@@ -45,8 +45,15 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
       drawPartNames: false,
       drawMetronomeMarks: true,
       backend: 'svg',
-      pageFormat: 'Endless' // Allows continuous smooth reading reflow
+      pageFormat: 'Endless',
+      stretchLastSystemLine: true,
+      spacingFactorSoftmax: 10
     });
+
+    // Configure OSMD built-in Engraving Rules for elegant, balanced measure spacing
+    (osmd as any).rules.RenderXMeasuresPerLineAkaSystem = 4;
+    (osmd as any).rules.StretchLastSystemLine = true;
+    (osmd as any).rules.MinNoteDistance = 2.0;
 
     osmdInstanceRef.current = osmd;
 
