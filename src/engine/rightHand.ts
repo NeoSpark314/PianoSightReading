@@ -1,14 +1,36 @@
 import { NoteData, HarmonicMeasure, StyleType, NotePitch, NoteDuration } from './types';
 import { pitchToMidi, stepOffsetToPitch } from './pitchUtils';
 
+export function selectPhraseMotif(style: StyleType): NoteDuration[] {
+  if (style === 'waltz') {
+    const waltzMotifs: NoteDuration[][] = [
+      ['quarter', 'quarter', 'quarter'],
+      ['quarter', 'eighth', 'eighth', 'quarter'],
+      ['dotted-quarter', 'eighth', 'quarter'],
+      ['quarter', 'sixteenth', 'sixteenth', 'sixteenth', 'sixteenth']
+    ];
+    return waltzMotifs[Math.floor(Math.random() * waltzMotifs.length)];
+  } else {
+    const motifs44: NoteDuration[][] = [
+      ['dotted-quarter', 'eighth', 'quarter', 'quarter'],
+      ['quarter', 'eighth', 'eighth', 'quarter', 'quarter'],
+      ['quarter', 'sixteenth', 'sixteenth', 'sixteenth', 'sixteenth', 'quarter', 'quarter'],
+      ['dotted-quarter', 'eighth', 'sixteenth', 'sixteenth', 'eighth', 'quarter'],
+      ['quarter', 'quarter', 'eighth', 'eighth', 'quarter']
+    ];
+    return motifs44[Math.floor(Math.random() * motifs44.length)];
+  }
+}
+
 export function generateRightHandMeasure(
   harmonicMeasure: HarmonicMeasure,
   style: StyleType,
   keyKey: string,
   prevNote: NoteData | null,
-  isFinalMeasure: boolean = false
+  isFinalMeasure: boolean = false,
+  phraseMotif?: NoteDuration[]
 ): NoteData[] {
-  const { chord } = harmonicMeasure;
+  const { chord, measureNumber } = harmonicMeasure;
 
   // Map chord tones to Treble register (Octaves 4 & 5)
   const trebleChordTones: NotePitch[] = chord.pitches.map(p => {
@@ -34,26 +56,28 @@ export function generateRightHandMeasure(
     }
   }
 
-  // Rhythmic templates depending on style
-  const rhythmTemplates44: NoteDuration[][] = [
-    ['quarter', 'quarter', 'quarter', 'quarter'],
-    ['half', 'quarter', 'quarter'],
-    ['dotted-quarter', 'eighth', 'quarter', 'quarter'],
-    ['quarter', 'eighth', 'eighth', 'quarter', 'quarter'],
-    ['half', 'half'],
-    ['quarter', 'quarter', 'half']
-  ];
+  // Determine rhythmic template based on 4-bar phrase structure (Motivic Intent)
+  const phrasePos = (measureNumber - 1) % 4;
+  let selectedTemplate: NoteDuration[];
 
-  const rhythmTemplates34: NoteDuration[][] = [
-    ['quarter', 'quarter', 'quarter'],
-    ['dotted-half'],
-    ['half', 'quarter'],
-    ['quarter', 'eighth', 'eighth', 'quarter'],
-    ['dotted-quarter', 'eighth', 'quarter']
-  ];
-
-  const templates = style === 'waltz' ? rhythmTemplates34 : rhythmTemplates44;
-  const selectedTemplate = templates[Math.floor(Math.random() * templates.length)];
+  if (phrasePos === 0 || phrasePos === 1) {
+    // Measure 1 & 2: Statement & Repetition of Phrase Motif
+    selectedTemplate = phraseMotif || selectPhraseMotif(style);
+  } else if (phrasePos === 2) {
+    // Measure 3: Rhythmic Variation / Acceleration
+    if (style === 'waltz') {
+      selectedTemplate = ['eighth', 'eighth', 'eighth', 'eighth', 'quarter'];
+    } else {
+      selectedTemplate = ['eighth', 'eighth', 'eighth', 'eighth', 'half'];
+    }
+  } else {
+    // Measure 4: Phrase Cadence resting point
+    if (style === 'waltz') {
+      selectedTemplate = ['dotted-half'];
+    } else {
+      selectedTemplate = ['half', 'half'];
+    }
+  }
 
   const measureNotes: NoteData[] = [];
   let currentPitch: NotePitch = prevNote?.pitch || trebleChordTones[Math.floor(Math.random() * trebleChordTones.length)];
@@ -70,9 +94,10 @@ export function generateRightHandMeasure(
                             duration === 'dotted-half' ? 3.0 :
                             duration === 'half' ? 2.0 :
                             duration === 'dotted-quarter' ? 1.5 :
-                            duration === 'quarter' ? 1.0 : 0.5;
+                            duration === 'quarter' ? 1.0 :
+                            duration === 'eighth' ? 0.5 : 0.25;
 
-    const isStrongBeat = (currentBeatOffset % 2.0 === 0) || (i === 0);
+    const isStrongBeat = (currentBeatOffset % 1.0 === 0) || (i === 0);
 
     let nextPitch: NotePitch;
 
@@ -87,6 +112,7 @@ export function generateRightHandMeasure(
         nextPitch = trebleChordTones[0];
       }
     } else {
+      // Weak beat or 16th note figure: step-wise movement
       const stepOffset = Math.random() > 0.5 ? 1 : -1;
       nextPitch = stepOffsetToPitch(currentPitch, stepOffset, keyKey);
     }

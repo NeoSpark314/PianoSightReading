@@ -1,8 +1,8 @@
-import { GenerationConfig, MusicPiece, MeasureData, TimeSignature } from './types';
+import { GenerationConfig, MusicPiece, MeasureData, TimeSignature, NoteDuration } from './types';
 import { KEYS_MAP } from './pitchUtils';
 import { generateHarmonicProgression } from './harmonics';
 import { generateLeftHandMeasure } from './leftHand';
-import { generateRightHandMeasure } from './rightHand';
+import { generateRightHandMeasure, selectPhraseMotif } from './rightHand';
 import { applyExpressiveMarkers } from './expressive';
 import { compileMusicXml } from './musicXmlCompiler';
 
@@ -32,13 +32,27 @@ export function generateSightReadingPiece(config: GenerationConfig): GeneratedRe
   // Phase 2 & 3: LH & RH note generation measure by measure
   const rawMeasures: MeasureData[] = [];
   let prevTrebleNote = null;
+  let activePhraseMotif: NoteDuration[] | undefined = undefined;
 
   for (let i = 0; i < harmonicProgression.length; i++) {
     const hMeasure = harmonicProgression[i];
     const isFinal = i === harmonicProgression.length - 1;
+    const phrasePos = i % 4;
+
+    // Select a fresh rhythmic motif for every 4-bar phrase
+    if (phrasePos === 0) {
+      activePhraseMotif = selectPhraseMotif(config.style);
+    }
 
     const bassNotes = generateLeftHandMeasure(hMeasure, config.style, isFinal);
-    const trebleNotes = generateRightHandMeasure(hMeasure, config.style, keyKey, prevTrebleNote, isFinal);
+    const trebleNotes = generateRightHandMeasure(
+      hMeasure,
+      config.style,
+      keyKey,
+      prevTrebleNote,
+      isFinal,
+      activePhraseMotif
+    );
 
     if (trebleNotes.length > 0) {
       prevTrebleNote = trebleNotes[trebleNotes.length - 1];

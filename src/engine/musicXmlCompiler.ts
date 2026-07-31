@@ -21,6 +21,73 @@ function durationToDivisionsAndType(duration: NoteDuration): { divisions: number
   }
 }
 
+/**
+ * Dynamically computes standard musical beam groupings for 8th and 16th notes
+ */
+function applyAutomaticBeaming(rawNotes: NoteData[], timeBeats: number): NoteData[] {
+  const notes = rawNotes.map(n => ({ ...n, beam: undefined as NoteData['beam'] }));
+  
+  // Calculate quarter-note start and end offsets for every note
+  let currentOffset = 0;
+  const noteOffsets = notes.map(n => {
+    const start = currentOffset;
+    const end = start + n.durationInQuarterNotes;
+    currentOffset = end;
+    return { start, end };
+  });
+
+  // Grouping 16th notes into 1-quarter beat windows
+  for (let b = 0; b < timeBeats; b++) {
+    const beatStart = b * 1.0;
+    const beatEnd = (b + 1) * 1.0;
+
+    const indices: number[] = [];
+    noteOffsets.forEach((off, idx) => {
+      if (notes[idx].duration === 'sixteenth' && !notes[idx].isRest && off.start >= beatStart && off.end <= beatEnd) {
+        indices.push(idx);
+      }
+    });
+
+    if (indices.length >= 2) {
+      indices.forEach((noteIdx, pos) => {
+        const val: 'begin' | 'continue' | 'end' = pos === 0 ? 'begin' : pos === indices.length - 1 ? 'end' : 'continue';
+        notes[noteIdx].beam = [
+          { number: 1, value: val },
+          { number: 2, value: val }
+        ];
+      });
+    }
+  }
+
+  // Grouping 8th notes into beat blocks (2-quarter blocks for 4/4, 1-quarter blocks for 3/4)
+  const blockSize = timeBeats === 3 ? 1.0 : 2.0;
+  const numBlocks = Math.ceil(timeBeats / blockSize);
+
+  for (let block = 0; block < numBlocks; block++) {
+    const blockStart = block * blockSize;
+    const blockEnd = (block + 1) * blockSize;
+
+    const indices: number[] = [];
+    noteOffsets.forEach((off, idx) => {
+      // Only beam 8th notes that don't already have sixteenth-level beams
+      if (notes[idx].duration === 'eighth' && !notes[idx].isRest && off.start >= blockStart && off.end <= blockEnd) {
+        indices.push(idx);
+      }
+    });
+
+    if (indices.length >= 2) {
+      indices.forEach((noteIdx, pos) => {
+        const val: 'begin' | 'continue' | 'end' = pos === 0 ? 'begin' : pos === indices.length - 1 ? 'end' : 'continue';
+        notes[noteIdx].beam = [
+          { number: 1, value: val }
+        ];
+      });
+    }
+  }
+
+  return notes;
+}
+
 function compileNoteXml(note: NoteData, voice: number, staff: number): string {
   const { divisions, typeStr, hasDot } = durationToDivisionsAndType(note.duration);
 
@@ -45,6 +112,13 @@ function compileNoteXml(note: NoteData, voice: number, staff: number): string {
     xml += '        <dot/>\n';
   }
   xml += `        <staff>${staff}</staff>\n`;
+
+  // Beam markers
+  if (note.beam && note.beam.length > 0) {
+    note.beam.forEach(b => {
+      xml += `        <beam number="${b.number}">${b.value}</beam>\n`;
+    });
+  }
 
   // Notation markers: slurs
   if (note.slurStart || note.slurStop) {
@@ -80,6 +154,8 @@ export function compileMusicXml(piece: MusicPiece): string {
 
   // Part P1
   xml += '  <part id="P1">\n';
+
+  const timeBeats = piece.timeSignature.beats;
 
   piece.measures.forEach((measure, idx) => {
     const isFirst = idx === 0;
@@ -136,9 +212,12 @@ export function compileMusicXml(piece: MusicPiece): string {
       }
     }
 
+    // Apply automatic metric beaming to Treble Notes
+    const beamedTrebleNotes = applyAutomaticBeaming(measure.trebleNotes, timeBeats);
+
     // Treble Notes (Voice 1, Staff 1)
     let trebleTotalDivisions = 0;
-    measure.trebleNotes.forEach((n) => {
+    beamedTrebleNotes.forEach((n) => {
       const { divisions } = durationToDivisionsAndType(n.duration);
       trebleTotalDivisions += divisions;
       xml += compileNoteXml(n, 1, 1);
@@ -147,8 +226,11 @@ export function compileMusicXml(piece: MusicPiece): string {
     // Backup to start of measure for Bass Clef
     xml += `      <backup>\n        <duration>${trebleTotalDivisions}</duration>\n      </backup>\n`;
 
+    // Apply automatic metric beaming to Bass Notes
+    const beamedBassNotes = applyAutomaticBeaming(measure.bassNotes, timeBeats);
+
     // Bass Notes (Voice 2, Staff 2)
-    measure.bassNotes.forEach((n) => {
+    beamedBassNotes.forEach((n) => {
       xml += compileNoteXml(n, 2, 2);
     });
 

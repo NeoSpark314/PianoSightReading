@@ -34,6 +34,7 @@ export interface NoteData {
   slurStop?: boolean;
   dynamic?: string; // 'p', 'mp', 'mf', 'f'
   fingering?: number;
+  beam?: Array<{ number: number; value: 'begin' | 'continue' | 'end' }>;
 }
 
 export interface ChordDefinition {
