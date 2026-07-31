@@ -1,8 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { OpenSheetMusicDisplay } from 'opensheetmusicdisplay';
 import { GeneratedResult } from '../engine/generator';
-import { audioSynth } from '../engine/audioSynth';
-import { ArrowLeft, Play, Square, RefreshCw, Maximize2, Minimize2 } from 'lucide-react';
+import { ArrowLeft, RefreshCw, Maximize2, Minimize2 } from 'lucide-react';
 
 interface ReadingViewProps {
   currentPieceResult: GeneratedResult;
@@ -25,7 +24,6 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
   const osmdInstanceRef = useRef<OpenSheetMusicDisplay | null>(null);
   const isNavigatingRef = useRef<boolean>(false);
   
-  const [isPlaying, setIsPlaying] = useState(false);
   const [leftTouchFlash, setLeftTouchFlash] = useState(false);
   const [rightTouchFlash, setRightTouchFlash] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -99,7 +97,6 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
 
     return () => {
       window.removeEventListener('resize', handleResize);
-      audioSynth.stop();
     };
   }, [currentPieceResult]);
 
@@ -136,8 +133,6 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
 
     setLeftTouchFlash(true);
     setTimeout(() => setLeftTouchFlash(false), 200);
-    audioSynth.stop();
-    setIsPlaying(false);
     onGeneratePrev();
   };
 
@@ -148,21 +143,7 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
 
     setRightTouchFlash(true);
     setTimeout(() => setRightTouchFlash(false), 200);
-    audioSynth.stop();
-    setIsPlaying(false);
     onGenerateNext();
-  };
-
-  const toggleAudio = () => {
-    if (isPlaying) {
-      audioSynth.stop();
-      setIsPlaying(false);
-    } else {
-      setIsPlaying(true);
-      audioSynth.playPiece(currentPieceResult.piece, () => {
-        setIsPlaying(false);
-      });
-    }
   };
 
   const toggleFullscreen = () => {
@@ -217,11 +198,6 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
           backgroundColor: 'rgba(255, 255, 255, 0.2)',
           margin: '0 0.25rem'
         }} />
-
-        {/* Audio Synth Toggle */}
-        <button className="icon-btn" onClick={toggleAudio} title={isPlaying ? 'Stop Playback' : 'Play Piece'}>
-          {isPlaying ? <Square size={18} fill="#ef4444" color="#ef4444" /> : <Play size={18} fill="#22c55e" color="#22c55e" />}
-        </button>
 
         {/* Next Piece Regenerate */}
         <button className="icon-btn" onClick={triggerRightAction} title="Generate Next Piece">
