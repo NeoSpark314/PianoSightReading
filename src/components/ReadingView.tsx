@@ -48,13 +48,15 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
       backend: 'svg',
       pageFormat: 'Endless',
       stretchLastSystemLine: true,
-      spacingFactorSoftmax: 10
+      spacingFactorSoftmax: 10,
+      pageBackgroundColor: '#fafafa'
     });
 
     // Configure OSMD built-in Engraving Rules for elegant, balanced measure spacing
     (osmd as any).rules.RenderXMeasuresPerLineAkaSystem = 4;
     (osmd as any).rules.StretchLastSystemLine = true;
     (osmd as any).rules.MinNoteDistance = 2.0;
+    (osmd as any).rules.PageBackgroundColor = '#fafafa';
 
     osmdInstanceRef.current = osmd;
 
