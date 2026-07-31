@@ -57,17 +57,37 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
 
     osmdInstanceRef.current = osmd;
 
+    // Render and auto-fit zoom scaling so entire piece fits vertically on screen
+    const renderAndFit = () => {
+      if (!osmdContainerRef.current || !osmdInstanceRef.current) return;
+      
+      const instance = osmdInstanceRef.current;
+      instance.zoom = 1.0;
+      instance.render();
+
+      const container = osmdContainerRef.current;
+      const svg = container.querySelector('svg');
+      const renderedHeight = svg ? svg.getBoundingClientRect().height : container.scrollHeight;
+      
+      // Calculate available height below top floating overlay bar
+      const availableHeight = window.innerHeight - 90;
+
+      if (renderedHeight > availableHeight && renderedHeight > 0) {
+        const targetZoom = Math.max(0.42, (availableHeight / renderedHeight) * 0.96);
+        instance.zoom = targetZoom;
+        instance.render();
+      }
+    };
+
     osmd.load(currentPieceResult.musicXml).then(() => {
-      osmd.render();
+      renderAndFit();
     }).catch(err => {
       console.error('Error rendering MusicXML in OSMD:', err);
     });
 
     // Resize listener for orientation change & window resize
     const handleResize = () => {
-      if (osmdInstanceRef.current) {
-        osmdInstanceRef.current.render();
-      }
+      renderAndFit();
     };
 
     window.addEventListener('resize', handleResize);
