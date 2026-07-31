@@ -58,25 +58,37 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
 
     osmdInstanceRef.current = osmd;
 
-    // Calculate optimal zoom factor BEFORE rendering to achieve a 1-pass fast render on tablets
+    // Render with fast optimal zoom calculation + post-render failsafe check
     const renderWithOptimalZoom = () => {
-      if (!osmdInstanceRef.current) return;
+      if (!osmdContainerRef.current || !osmdInstanceRef.current) return;
       const instance = osmdInstanceRef.current;
 
       const totalMeasures = currentPieceResult.piece.measures.length;
       const systemCount = Math.ceil(totalMeasures / 4);
       
-      // Estimated height per grand staff system + margins
-      const estimatedHeight = systemCount * 170 + 90;
+      // Estimated height per grand staff system + title/composer header (~140px)
+      const estimatedHeight = systemCount * 185 + 140;
       const availableHeight = window.innerHeight - 90;
 
       let optimalZoom = 1.0;
       if (estimatedHeight > availableHeight && estimatedHeight > 0) {
-        optimalZoom = Math.max(0.42, Math.min(1.0, (availableHeight / estimatedHeight) * 0.98));
+        optimalZoom = Math.max(0.40, Math.min(1.0, (availableHeight / estimatedHeight) * 0.95));
       }
 
       instance.zoom = optimalZoom;
-      instance.render(); // Single fast render pass!
+      instance.render();
+
+      // Post-render failsafe check: measure actual rendered SVG height
+      const container = osmdContainerRef.current;
+      const svg = container.querySelector('svg');
+      if (svg) {
+        const actualHeight = svg.getBoundingClientRect().height;
+        if (actualHeight > availableHeight && actualHeight > 0) {
+          const correctedZoom = Math.max(0.35, instance.zoom * (availableHeight / actualHeight) * 0.95);
+          instance.zoom = correctedZoom;
+          instance.render();
+        }
+      }
     };
 
     osmd.load(currentPieceResult.musicXml).then(() => {
