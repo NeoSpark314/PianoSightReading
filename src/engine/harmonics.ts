@@ -1,13 +1,14 @@
 import { ChordDefinition, HarmonicMeasure } from './types';
-import { KEYS_MAP, pitchToMidi, NotePitch } from './pitchUtils';
+import { KEYS_MAP, pitchToMidi, midiToPitch, NotePitch } from './pitchUtils';
 
-// Helper to build a ChordDefinition given root step, alter, octave, and quality
+// Helper to build a ChordDefinition given root step, alter, octave, quality, and active key
 function buildChord(
   name: string,
   functionName: string,
   rootStep: NotePitch['step'],
   rootAlter: number = 0,
   quality: 'major' | 'minor' | 'diminished' | 'dominant7' | 'major7',
+  keyKey: string,
   bassOctave: number = 3
 ): ChordDefinition {
   const rootMidi = pitchToMidi({ step: rootStep, alter: rootAlter !== 0 ? rootAlter : undefined, octave: bassOctave, midi: 0 });
@@ -20,32 +21,7 @@ function buildChord(
 
   const pitches: NotePitch[] = intervals.map(semitones => {
     const midi = rootMidi + semitones;
-    const oct = Math.floor(midi / 12) - 1;
-    const stepOffsets: Record<NotePitch['step'], number> = { 'C': 0, 'D': 2, 'E': 4, 'F': 5, 'G': 7, 'A': 9, 'B': 11 };
-    const pc = midi % 12;
-    
-    let bestStep: NotePitch['step'] = 'C';
-    let bestAlter = 0;
-    
-    const steps: NotePitch['step'][] = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
-    for (const st of steps) {
-      const basePc = stepOffsets[st];
-      let diff = pc - basePc;
-      if (diff > 6) diff -= 12;
-      if (diff < -6) diff += 12;
-      if (Math.abs(diff) <= 2) {
-        bestStep = st;
-        bestAlter = diff;
-        break;
-      }
-    }
-
-    return {
-      step: bestStep,
-      alter: bestAlter !== 0 ? bestAlter : undefined,
-      octave: oct,
-      midi
-    };
+    return midiToPitch(midi, keyKey);
   });
 
   return {
@@ -66,25 +42,25 @@ export function generateHarmonicProgression(keyKey: string, length: 8 | 16 | 32)
 
   if (!isMinor) {
     chords = {
-      'I': buildChord(`${key.tonicStep}maj`, 'I', key.scaleSteps[0], key.scaleAlters[0], 'major', 3),
-      'ii': buildChord(`${key.scaleSteps[1]}m`, 'ii', key.scaleSteps[1], key.scaleAlters[1], 'minor', 3),
-      'iii': buildChord(`${key.scaleSteps[2]}m`, 'iii', key.scaleSteps[2], key.scaleAlters[2], 'minor', 3),
-      'IV': buildChord(`${key.scaleSteps[3]}maj`, 'IV', key.scaleSteps[3], key.scaleAlters[3], 'major', 3),
-      'V': buildChord(`${key.scaleSteps[4]}maj`, 'V', key.scaleSteps[4], key.scaleAlters[4], 'major', 3),
-      'V7': buildChord(`${key.scaleSteps[4]}7`, 'V7', key.scaleSteps[4], key.scaleAlters[4], 'dominant7', 3),
-      'vi': buildChord(`${key.scaleSteps[5]}m`, 'vi', key.scaleSteps[5], key.scaleAlters[5], 'minor', 3),
-      'vii°': buildChord(`${key.scaleSteps[6]}dim`, 'vii°', key.scaleSteps[6], key.scaleAlters[6], 'diminished', 3)
+      'I': buildChord(`${key.tonicStep}maj`, 'I', key.scaleSteps[0], key.scaleAlters[0], 'major', keyKey, 3),
+      'ii': buildChord(`${key.scaleSteps[1]}m`, 'ii', key.scaleSteps[1], key.scaleAlters[1], 'minor', keyKey, 3),
+      'iii': buildChord(`${key.scaleSteps[2]}m`, 'iii', key.scaleSteps[2], key.scaleAlters[2], 'minor', keyKey, 3),
+      'IV': buildChord(`${key.scaleSteps[3]}maj`, 'IV', key.scaleSteps[3], key.scaleAlters[3], 'major', keyKey, 3),
+      'V': buildChord(`${key.scaleSteps[4]}maj`, 'V', key.scaleSteps[4], key.scaleAlters[4], 'major', keyKey, 3),
+      'V7': buildChord(`${key.scaleSteps[4]}7`, 'V7', key.scaleSteps[4], key.scaleAlters[4], 'dominant7', keyKey, 3),
+      'vi': buildChord(`${key.scaleSteps[5]}m`, 'vi', key.scaleSteps[5], key.scaleAlters[5], 'minor', keyKey, 3),
+      'vii°': buildChord(`${key.scaleSteps[6]}dim`, 'vii°', key.scaleSteps[6], key.scaleAlters[6], 'diminished', keyKey, 3)
     };
   } else {
     chords = {
-      'i': buildChord(`${key.tonicStep}m`, 'i', key.scaleSteps[0], key.scaleAlters[0], 'minor', 3),
-      'ii°': buildChord(`${key.scaleSteps[1]}dim`, 'ii°', key.scaleSteps[1], key.scaleAlters[1], 'diminished', 3),
-      'III': buildChord(`${key.scaleSteps[2]}maj`, 'III', key.scaleSteps[2], key.scaleAlters[2], 'major', 3),
-      'iv': buildChord(`${key.scaleSteps[3]}m`, 'iv', key.scaleSteps[3], key.scaleAlters[3], 'minor', 3),
-      'V': buildChord(`${key.scaleSteps[4]}maj`, 'V', key.scaleSteps[4], key.scaleAlters[4], 'major', 3),
-      'V7': buildChord(`${key.scaleSteps[4]}7`, 'V7', key.scaleSteps[4], key.scaleAlters[4], 'dominant7', 3),
-      'VI': buildChord(`${key.scaleSteps[5]}maj`, 'VI', key.scaleSteps[5], key.scaleAlters[5], 'major', 3),
-      'vii°': buildChord(`${key.scaleSteps[6]}dim`, 'vii°', key.scaleSteps[6], key.scaleAlters[6], 'diminished', 3)
+      'i': buildChord(`${key.tonicStep}m`, 'i', key.scaleSteps[0], key.scaleAlters[0], 'minor', keyKey, 3),
+      'ii°': buildChord(`${key.scaleSteps[1]}dim`, 'ii°', key.scaleSteps[1], key.scaleAlters[1], 'diminished', keyKey, 3),
+      'III': buildChord(`${key.scaleSteps[2]}maj`, 'III', key.scaleSteps[2], key.scaleAlters[2], 'major', keyKey, 3),
+      'iv': buildChord(`${key.scaleSteps[3]}m`, 'iv', key.scaleSteps[3], key.scaleAlters[3], 'minor', keyKey, 3),
+      'V': buildChord(`${key.scaleSteps[4]}maj`, 'V', key.scaleSteps[4], key.scaleAlters[4], 'major', keyKey, 3),
+      'V7': buildChord(`${key.scaleSteps[4]}7`, 'V7', key.scaleSteps[4], key.scaleAlters[4], 'dominant7', keyKey, 3),
+      'VI': buildChord(`${key.scaleSteps[5]}maj`, 'VI', key.scaleSteps[5], key.scaleAlters[5], 'major', keyKey, 3),
+      'vii°': buildChord(`${key.scaleSteps[6]}dim`, 'vii°', key.scaleSteps[6], key.scaleAlters[6], 'diminished', keyKey, 3)
     };
   }
 

@@ -2,7 +2,6 @@ import { NoteData, HarmonicMeasure, StyleType, NotePitch } from './types';
 
 // Helper to construct a LH pitch in a specific bass octave (usually Octave 2 or 3)
 function getVoicedLHPitches(chordPitches: NotePitch[], targetBassOctave: number = 3): NotePitch[] {
-  // Take chord root, 3rd, 5th, 7th and shift to target octave
   if (!chordPitches || chordPitches.length === 0) {
     return [{ step: 'C', octave: targetBassOctave, midi: 48 }];
   }
@@ -11,16 +10,16 @@ function getVoicedLHPitches(chordPitches: NotePitch[], targetBassOctave: number 
   const third = chordPitches[1] || root;
   const fifth = chordPitches[2] || third;
 
-  // Root in low bass (e.g. C3 = 48)
   const rootMidi = (targetBassOctave + 1) * 12 + ((root.midi % 12));
-  const rootPitch: NotePitch = { ...root, octave: targetBassOctave, midi: rootMidi };
+  const rootPitch: NotePitch = { ...root, octave: Math.floor(rootMidi / 12) - 1, midi: rootMidi };
 
-  // 3rd & 5th in middle bass register (slightly above root)
-  const thirdMidi = (targetBassOctave + 1) * 12 + ((third.midi % 12));
-  const thirdPitch: NotePitch = { ...third, octave: targetBassOctave, midi: thirdMidi < rootMidi ? thirdMidi + 12 : thirdMidi };
+  let thirdMidi = (targetBassOctave + 1) * 12 + ((third.midi % 12));
+  if (thirdMidi < rootMidi) thirdMidi += 12;
+  const thirdPitch: NotePitch = { ...third, octave: Math.floor(thirdMidi / 12) - 1, midi: thirdMidi };
 
-  const fifthMidi = (targetBassOctave + 1) * 12 + ((fifth.midi % 12));
-  const fifthPitch: NotePitch = { ...fifth, octave: targetBassOctave, midi: fifthMidi < rootMidi ? fifthMidi + 12 : fifthMidi };
+  let fifthMidi = (targetBassOctave + 1) * 12 + ((fifth.midi % 12));
+  if (fifthMidi < rootMidi) fifthMidi += 12;
+  const fifthPitch: NotePitch = { ...fifth, octave: Math.floor(fifthMidi / 12) - 1, midi: fifthMidi };
 
   return [rootPitch, thirdPitch, fifthPitch];
 }
@@ -63,7 +62,6 @@ export function generateLeftHandMeasure(
 
     case 'waltz': {
       // 3/4 Time: Beat 1 = Root note, Beat 2 = blocked chord (3rd + 5th), Beat 3 = blocked chord
-      // Note: For OSMD/MusicXML representation, we can output single note or chord note.
       return [
         {
           pitch: root,
