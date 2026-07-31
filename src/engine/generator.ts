@@ -26,10 +26,10 @@ export function generateSightReadingPiece(config: GenerationConfig): GeneratedRe
     keyKey = keys[Math.floor(Math.random() * keys.length)];
   }
 
-  // Resolve random length
+  // Resolve random length (max 16 bars for optimal tablet readability)
   let length: 8 | 16 | 32 = config.length === 'random' ? 8 : config.length;
   if (config.length === 'random') {
-    const lengths: (8 | 16 | 32)[] = [8, 16, 32];
+    const lengths: (8 | 16)[] = [8, 16];
     length = lengths[Math.floor(Math.random() * lengths.length)];
   }
 
