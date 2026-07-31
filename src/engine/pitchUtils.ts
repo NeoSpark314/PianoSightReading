@@ -1,7 +1,6 @@
 import { NotePitch, NoteDuration } from './types';
 export type { NotePitch, NoteDuration };
 
-
 export interface KeyInfo {
   name: string;
   fifths: number;
@@ -31,7 +30,6 @@ export const KEYS_MAP: Record<string, KeyInfo> = {
     tonicStep: 'A',
     tonicAlter: 0,
     tonicMidi: 57,
-    // Harmonic minor: G#
     scaleSteps: ['A', 'B', 'C', 'D', 'E', 'F', 'G'],
     scaleAlters: [0, 0, 0, 0, 0, 0, 1] // G# for leading tone
   },
@@ -81,16 +79,12 @@ const STEP_MIDI_OFFSET: Record<NotePitch['step'], number> = {
   'C': 0, 'D': 2, 'E': 4, 'F': 5, 'G': 7, 'A': 9, 'B': 11
 };
 
-const ALL_STEPS: NotePitch['step'][] = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
-
 export function midiToPitch(midi: number, preferredKeyKey: string = 'C'): NotePitch {
   const octave = Math.floor(midi / 12) - 1;
   const pc = midi % 12;
 
-  // Key scale alter preference
   const keyInfo = KEYS_MAP[preferredKeyKey] || KEYS_MAP['C'];
 
-  // Default mapping for chromatic pitches
   for (let i = 0; i < keyInfo.scaleSteps.length; i++) {
     const step = keyInfo.scaleSteps[i];
     const alter = keyInfo.scaleAlters[i];
@@ -100,7 +94,6 @@ export function midiToPitch(midi: number, preferredKeyKey: string = 'C'): NotePi
     }
   }
 
-  // General fallback
   const stepMap: { step: NotePitch['step']; alter?: number }[] = [
     { step: 'C' }, { step: 'C', alter: 1 }, { step: 'D' }, { step: 'D', alter: 1 },
     { step: 'E' }, { step: 'F' }, { step: 'F', alter: 1 }, { step: 'G' },
@@ -141,17 +134,8 @@ export function getDiatonicScalePitches(keyKey: string, octaves: number[] = [3, 
   return pitches.sort((a, b) => a.midi - b.midi);
 }
 
-export function getDiatonicStepOffset(p1: NotePitch, p2: NotePitch): number {
-  const stepIdx1 = ALL_STEPS.indexOf(p1.step);
-  const stepIdx2 = ALL_STEPS.indexOf(p2.step);
-  const totalSteps1 = p1.octave * 7 + stepIdx1;
-  const totalSteps2 = p2.octave * 7 + stepIdx2;
-  return totalSteps2 - totalSteps1;
-}
-
 export function stepOffsetToPitch(basePitch: NotePitch, stepOffset: number, keyKey: string): NotePitch {
   const diatonicPitches = getDiatonicScalePitches(keyKey, [1, 2, 3, 4, 5, 6]);
-  // Find closest matching index in diatonic scale
   let baseIndex = diatonicPitches.findIndex(p => p.midi === basePitch.midi);
   if (baseIndex === -1) {
     baseIndex = diatonicPitches.findIndex(p => p.step === basePitch.step && p.octave === basePitch.octave);
