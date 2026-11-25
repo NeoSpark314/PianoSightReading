@@ -399,8 +399,9 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
             padding: '0 0.25rem',
             whiteSpace: 'nowrap'
           }}
+          title={currentPieceResult.piece.pedagogicalTags.join(' · ')}
         >
-          #{historyIndex + 1} · {currentPieceResult.piece.keyName}
+          #{historyIndex + 1} · {currentPieceResult.piece.keyName} · L{currentPieceResult.piece.difficulty}
         </span>
 
         <button

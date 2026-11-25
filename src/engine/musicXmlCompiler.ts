@@ -1,4 +1,4 @@
-import { MusicPiece, NoteData } from './types';
+import { MusicPiece, NoteData, NotePitch, TimeSignature } from './types';
 import { DIVISIONS_PER_QUARTER, DURATION_SPECS } from './durationUtils';
 
 function escapeXml(str: string): string {
@@ -10,110 +10,240 @@ function escapeXml(str: string): string {
     .replace(/'/g, '&apos;');
 }
 
+// Compute key-signature default alteration for each diatonic step (C..B)
+const SHARP_ORDER: NotePitch['step'][] = ['F', 'C', 'G', 'D', 'A', 'E', 'B'];
+const FLAT_ORDER: NotePitch['step'][] = ['B', 'E', 'A', 'D', 'G', 'C', 'F'];
+
+function getKeySigStepAlter(step: NotePitch['step'], fifths: number): number {
+  if (fifths > 0) {
+    return SHARP_ORDER.slice(0, fifths).includes(step) ? 1 : 0;
+  }
+  if (fifths < 0) {
+    return FLAT_ORDER.slice(0, Math.abs(fifths)).includes(step) ? -1 : 0;
+  }
+  return 0;
+}
+
+function alterToAccidentalName(alter: number): string {
+  if (alter === 1) return 'sharp';
+  if (alter === -1) return 'flat';
+  if (alter === 2) return 'double-sharp';
+  if (alter === -2) return 'flat-flat';
+  return 'natural';
+}
+
+function isBeamable(note: NoteData): boolean {
+  return (
+    !note.isRest &&
+    (note.duration === 'eighth' ||
+      note.duration === 'sixteenth' ||
+      note.duration === 'dotted-eighth')
+  );
+}
+
 /**
- * Dynamically computes standard musical beam groupings for 8th and 16th notes
+ * Dynamically computes standard musical beam groupings for 4/4, 3/4, 2/4, and 6/8.
  */
-function applyAutomaticBeaming(rawNotes: NoteData[], timeBeats: number): NoteData[] {
+function applyAutomaticBeaming(rawNotes: NoteData[], timeSignature: TimeSignature): NoteData[] {
   const notes = rawNotes.map(n => ({ ...n, beam: undefined as NoteData['beam'] }));
-  
-  // Calculate quarter-note start and end offsets for every note
+
   let currentOffset = 0;
-  const noteOffsets = notes.map(n => {
+  const offsets = notes.map(n => {
     const start = currentOffset;
     const end = start + n.durationInQuarterNotes;
     currentOffset = end;
     return { start, end };
   });
 
-  // Grouping 16th notes into 1-quarter beat windows
-  for (let b = 0; b < timeBeats; b++) {
-    const beatStart = b * 1.0;
-    const beatEnd = (b + 1) * 1.0;
-
-    const indices: number[] = [];
-    noteOffsets.forEach((off, idx) => {
-      if (notes[idx].duration === 'sixteenth' && !notes[idx].isRest && off.start >= beatStart && off.end <= beatEnd) {
-        indices.push(idx);
-      }
-    });
-
-    if (indices.length >= 2) {
-      indices.forEach((noteIdx, pos) => {
-        const val: 'begin' | 'continue' | 'end' = pos === 0 ? 'begin' : pos === indices.length - 1 ? 'end' : 'continue';
-        notes[noteIdx].beam = [
-          { number: 1, value: val },
-          { number: 2, value: val }
-        ];
-      });
-    }
+  // Determine primary beam-group size in quarter beats
+  // 6/8 -> 1.5 quarter beats (3 eighths per macro-beat)
+  // 4/4 -> 2.0 quarter beats (beats 1-2, beats 3-4; never crosses the middle of the bar)
+  // 3/4 -> 1.0 quarter beat
+  // 2/4 -> 1.0 quarter beat
+  let groupSize = 1.0;
+  if (timeSignature.name === '6/8') {
+    groupSize = 1.5;
+  } else if (timeSignature.name === '4/4') {
+    groupSize = 2.0;
   }
 
-  // Grouping 8th notes into beat blocks (2-quarter blocks for 4/4, 1-quarter blocks for 3/4)
-  const blockSize = timeBeats === 3 ? 1.0 : 2.0;
-  const numBlocks = Math.ceil(timeBeats / blockSize);
+  const totalQuarterBeats = timeSignature.beats * (4 / timeSignature.beatType);
+  const numGroups = Math.round(totalQuarterBeats / groupSize);
 
-  for (let block = 0; block < numBlocks; block++) {
-    const blockStart = block * blockSize;
-    const blockEnd = (block + 1) * blockSize;
+  const EPS = 1e-5;
 
-    const indices: number[] = [];
-    noteOffsets.forEach((off, idx) => {
-      // Only beam 8th notes that don't already have sixteenth-level beams
-      if (notes[idx].duration === 'eighth' && !notes[idx].isRest && off.start >= blockStart && off.end <= blockEnd) {
-        indices.push(idx);
+  for (let g = 0; g < numGroups; g++) {
+    const gStart = g * groupSize;
+    const gEnd = (g + 1) * groupSize;
+
+    // Collect contiguous runs of beamable notes strictly inside [gStart, gEnd]
+    let run: number[] = [];
+    const flushRun = () => {
+      if (run.length >= 2) {
+        // Assign level-1 beams across the run
+        run.forEach((noteIdx, pos) => {
+          const val: 'begin' | 'continue' | 'end' =
+            pos === 0 ? 'begin' : pos === run.length - 1 ? 'end' : 'continue';
+          notes[noteIdx].beam = [{ number: 1, value: val }];
+        });
+
+        // Assign level-2 beams for contiguous sixteenth runs within the group
+        let subRun: number[] = [];
+        const flushSubRun = () => {
+          if (subRun.length >= 2) {
+            subRun.forEach((noteIdx, pos) => {
+              const val: 'begin' | 'continue' | 'end' =
+                pos === 0 ? 'begin' : pos === subRun.length - 1 ? 'end' : 'continue';
+              notes[noteIdx].beam = [...(notes[noteIdx].beam || []), { number: 2, value: val }];
+            });
+          } else if (subRun.length === 1) {
+            // Single 16th paired with dotted-eighth gets a hook (backward if at end, forward if at start)
+            const idx = subRun[0];
+            const posInRun = run.indexOf(idx);
+            const hookVal = posInRun > 0 ? 'end' : 'begin';
+            // OSMD handles backward/forward hooks cleanly via standard beam when needed,
+            // omit single-note beam 2 if ambiguous to keep rendering rock-solid
+            if (posInRun > 0 && notes[run[posInRun - 1]].duration === 'dotted-eighth') {
+              notes[idx].beam = [...(notes[idx].beam || []), { number: 2, value: hookVal }];
+            }
+          }
+          subRun = [];
+        };
+
+        for (const noteIdx of run) {
+          if (notes[noteIdx].duration === 'sixteenth') {
+            subRun.push(noteIdx);
+          } else {
+            flushSubRun();
+          }
+        }
+        flushSubRun();
       }
-    });
+      run = [];
+    };
 
-    if (indices.length >= 2) {
-      indices.forEach((noteIdx, pos) => {
-        const val: 'begin' | 'continue' | 'end' = pos === 0 ? 'begin' : pos === indices.length - 1 ? 'end' : 'continue';
-        notes[noteIdx].beam = [
-          { number: 1, value: val }
-        ];
-      });
+    for (let i = 0; i < notes.length; i++) {
+      const off = offsets[i];
+      const insideGroup = off.start >= gStart - EPS && off.end <= gEnd + EPS;
+      if (insideGroup && isBeamable(notes[i])) {
+        run.push(i);
+      } else {
+        flushRun();
+      }
     }
+    flushRun();
   }
 
   return notes;
 }
 
-function compileNoteXml(note: NoteData, voice: number, staff: number): string {
+function resolvePitchList(note: NoteData): NotePitch[] {
+  if (note.isRest) return [];
+  if (note.pitches && note.pitches.length > 0) {
+    return [...note.pitches].sort((a, b) => a.midi - b.midi);
+  }
+  if (note.pitch) return [note.pitch];
+  return [];
+}
+
+function compileSingleNoteElement(
+  pitch: NotePitch | null,
+  note: NoteData,
+  voice: number,
+  staff: number,
+  isChordMember: boolean,
+  accidentalState: Map<string, number>,
+  keyFifths: number
+): string {
   const { divisions, xmlType, hasDot } = DURATION_SPECS[note.duration];
 
   let xml = '      <note>\n';
 
-  if (note.isRest || !note.pitch) {
+  if (isChordMember) {
+    xml += '        <chord/>\n';
+  }
+
+  let accidentalTag: string | null = null;
+
+  if (!pitch) {
     xml += '        <rest/>\n';
   } else {
-    xml += '        <pitch>\n';
-    xml += `          <step>${note.pitch.step}</step>\n`;
-    if (note.pitch.alter !== undefined && note.pitch.alter !== 0) {
-      xml += `          <alter>${note.pitch.alter}</alter>\n`;
+    const alter = pitch.alter || 0;
+    const stateKey = `${pitch.step}${pitch.octave}`;
+    const activeAlter = accidentalState.has(stateKey)
+      ? accidentalState.get(stateKey)!
+      : getKeySigStepAlter(pitch.step, keyFifths);
+
+    if (alter !== activeAlter) {
+      accidentalTag = alterToAccidentalName(alter);
+      accidentalState.set(stateKey, alter);
     }
-    xml += `          <octave>${note.pitch.octave}</octave>\n`;
+
+    xml += '        <pitch>\n';
+    xml += `          <step>${pitch.step}</step>\n`;
+    if (alter !== 0) {
+      xml += `          <alter>${alter}</alter>\n`;
+    }
+    xml += `          <octave>${pitch.octave}</octave>\n`;
     xml += '        </pitch>\n';
   }
 
   xml += `        <duration>${divisions}</duration>\n`;
+
+  // Tie playback markers (on all noteheads of a tied chord/note)
+  if (pitch && note.tie) {
+    if (note.tie === 'stop' || note.tie === 'continue') {
+      xml += '        <tie type="stop"/>\n';
+    }
+    if (note.tie === 'start' || note.tie === 'continue') {
+      xml += '        <tie type="start"/>\n';
+    }
+  }
+
   xml += `        <voice>${voice}</voice>\n`;
   xml += `        <type>${xmlType}</type>\n`;
   if (hasDot) {
     xml += '        <dot/>\n';
   }
+  if (accidentalTag) {
+    xml += `        <accidental>${accidentalTag}</accidental>\n`;
+  }
   xml += `        <staff>${staff}</staff>\n`;
 
-  // Beam markers
-  if (note.beam && note.beam.length > 0) {
+  // Beam markers (only on primary notehead of chord)
+  if (!isChordMember && note.beam && note.beam.length > 0) {
     note.beam.forEach(b => {
       xml += `        <beam number="${b.number}">${b.value}</beam>\n`;
     });
   }
 
-  // Notation markers: slurs
-  if (note.slurStart || note.slurStop) {
+  // Notations: ties, slurs, articulations
+  const hasTieNotation = Boolean(pitch && note.tie);
+  const hasSlurNotation = !isChordMember && Boolean(note.slurStart || note.slurStop);
+  const hasArticulations =
+    !isChordMember && Boolean(note.articulations && note.articulations.length > 0);
+
+  if (hasTieNotation || hasSlurNotation || hasArticulations) {
     xml += '        <notations>\n';
-    if (note.slurStart) xml += '          <slur type="start" number="1"/>\n';
-    if (note.slurStop) xml += '          <slur type="stop" number="1"/>\n';
+    if (hasTieNotation) {
+      if (note.tie === 'stop' || note.tie === 'continue') {
+        xml += '          <tied type="stop"/>\n';
+      }
+      if (note.tie === 'start' || note.tie === 'continue') {
+        xml += '          <tied type="start"/>\n';
+      }
+    }
+    if (hasSlurNotation) {
+      if (note.slurStart) xml += '          <slur type="start" number="1"/>\n';
+      if (note.slurStop) xml += '          <slur type="stop" number="1"/>\n';
+    }
+    if (hasArticulations && note.articulations) {
+      xml += '          <articulations>\n';
+      for (const art of note.articulations) {
+        xml += `            <${art}/>\n`;
+      }
+      xml += '          </articulations>\n';
+    }
     xml += '        </notations>\n';
   }
 
@@ -121,11 +251,39 @@ function compileNoteXml(note: NoteData, voice: number, staff: number): string {
   return xml;
 }
 
+function compileNoteDataXml(
+  note: NoteData,
+  voice: number,
+  staff: number,
+  accidentalState: Map<string, number>,
+  keyFifths: number
+): string {
+  const pitches = resolvePitchList(note);
+  if (pitches.length === 0) {
+    return compileSingleNoteElement(null, note, voice, staff, false, accidentalState, keyFifths);
+  }
+
+  let xml = '';
+  pitches.forEach((p, idx) => {
+    xml += compileSingleNoteElement(
+      p,
+      note,
+      voice,
+      staff,
+      idx > 0,
+      accidentalState,
+      keyFifths
+    );
+  });
+  return xml;
+}
+
 export function compileMusicXml(piece: MusicPiece): string {
   let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
-  xml += '<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 3.1 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd">\n';
+  xml +=
+    '<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 3.1 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd">\n';
   xml += '<score-partwise version="3.1">\n';
-  
+
   // Work Header
   xml += '  <work>\n';
   xml += `    <work-title>${escapeXml(piece.title)}</work-title>\n`;
@@ -144,7 +302,6 @@ export function compileMusicXml(piece: MusicPiece): string {
   // Part P1
   xml += '  <part id="P1">\n';
 
-  const timeBeats = piece.timeSignature.beats;
   const totalMeasures = piece.measures.length;
 
   piece.measures.forEach((measure, idx) => {
@@ -175,7 +332,7 @@ export function compileMusicXml(piece: MusicPiece): string {
       xml += '      </attributes>\n';
     }
 
-    // Tempo expression text (e.g. "Tempo di Valse", "Allegretto")
+    // Tempo expression text
     if (measure.tempoMarker) {
       xml += '      <direction placement="above">\n';
       xml += '        <direction-type>\n';
@@ -185,12 +342,16 @@ export function compileMusicXml(piece: MusicPiece): string {
       xml += '      </direction>\n';
     }
 
-    // Metronome mark on the opening measure (stacked cleanly above tempo text via OSMD EngravingRules)
+    // Metronome mark on the opening measure
     if (isFirst && piece.tempo) {
+      const beatUnit = piece.timeSignature.name === '6/8' ? 'quarter' : 'quarter';
       xml += '      <direction placement="above">\n';
       xml += '        <direction-type>\n';
       xml += '          <metronome parentheses="yes">\n';
-      xml += '            <beat-unit>quarter</beat-unit>\n';
+      xml += `            <beat-unit>${beatUnit}</beat-unit>\n`;
+      if (piece.timeSignature.name === '6/8') {
+        xml += '            <beat-unit-dot/>\n';
+      }
       xml += `            <per-minute>${piece.tempo}</per-minute>\n`;
       xml += '          </metronome>\n';
       xml += '        </direction-type>\n';
@@ -211,10 +372,10 @@ export function compileMusicXml(piece: MusicPiece): string {
 
     // Dynamic marker direction (placed between grand staves via staff 1 below)
     if (measure.dynamicMarker) {
-      if (measure.dynamicMarker === 'crescendo') {
+      if (measure.dynamicMarker === 'crescendo' || measure.dynamicMarker === 'diminuendo') {
         xml += '      <direction placement="below">\n';
         xml += '        <direction-type>\n';
-        xml += '          <wedge type="crescendo"/>\n';
+        xml += `          <wedge type="${measure.dynamicMarker}"/>\n`;
         xml += '        </direction-type>\n';
         xml += '        <staff>1</staff>\n';
         xml += '      </direction>\n';
@@ -230,26 +391,30 @@ export function compileMusicXml(piece: MusicPiece): string {
       }
     }
 
+    // Track accidentals independently per staff per measure
+    const trebleAccidentals = new Map<string, number>();
+    const bassAccidentals = new Map<string, number>();
+
     // Apply automatic metric beaming to Treble Notes
-    const beamedTrebleNotes = applyAutomaticBeaming(measure.trebleNotes, timeBeats);
+    const beamedTrebleNotes = applyAutomaticBeaming(measure.trebleNotes, piece.timeSignature);
 
     // Treble Notes (Voice 1, Staff 1)
     let trebleTotalDivisions = 0;
-    beamedTrebleNotes.forEach((n) => {
+    beamedTrebleNotes.forEach(n => {
       const { divisions } = DURATION_SPECS[n.duration];
       trebleTotalDivisions += divisions;
-      xml += compileNoteXml(n, 1, 1);
+      xml += compileNoteDataXml(n, 1, 1, trebleAccidentals, piece.keyFifths);
     });
 
     // Backup to start of measure for Bass Clef
     xml += `      <backup>\n        <duration>${trebleTotalDivisions}</duration>\n      </backup>\n`;
 
     // Apply automatic metric beaming to Bass Notes
-    const beamedBassNotes = applyAutomaticBeaming(measure.bassNotes, timeBeats);
+    const beamedBassNotes = applyAutomaticBeaming(measure.bassNotes, piece.timeSignature);
 
     // Bass Notes (Voice 2, Staff 2)
-    beamedBassNotes.forEach((n) => {
-      xml += compileNoteXml(n, 2, 2);
+    beamedBassNotes.forEach(n => {
+      xml += compileNoteDataXml(n, 2, 2, bassAccidentals, piece.keyFifths);
     });
 
     // Final double barline on last measure

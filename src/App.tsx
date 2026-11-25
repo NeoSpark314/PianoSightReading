@@ -9,7 +9,8 @@ const STORAGE_KEY = 'piano_sight_reading_config';
 const DEFAULT_CONFIG: GenerationConfig = {
   style: 'random',
   keyCenter: 'random',
-  length: 'random'
+  length: 'random',
+  difficulty: 2
 };
 
 export const App: React.FC = () => {
@@ -19,7 +20,7 @@ export const App: React.FC = () => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
-        return JSON.parse(saved);
+        return { ...DEFAULT_CONFIG, ...JSON.parse(saved) };
       }
     } catch (err) {
       console.warn('Could not read saved settings from localStorage:', err);

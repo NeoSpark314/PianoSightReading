@@ -1,50 +1,83 @@
-import { MeasureData, StyleType } from './types';
+import { MeasureBlueprint, MeasureData, NoteData } from './types';
+import { StyleRealizer } from './styles/types';
+
+function findFirstSoundingIndex(notes: NoteData[]): number {
+  return notes.findIndex(n => !n.isRest);
+}
+
+function findLastSoundingIndex(notes: NoteData[]): number {
+  for (let i = notes.length - 1; i >= 0; i--) {
+    if (!notes[i].isRest) return i;
+  }
+  return -1;
+}
 
 export function applyExpressiveMarkers(
   measures: MeasureData[],
-  style: StyleType
+  styleRealizer: StyleRealizer,
+  blueprints: MeasureBlueprint[]
 ): MeasureData[] {
   const totalMeasures = measures.length;
 
-  // Tempo markings based on style
-  const tempoTexts: Record<string, string> = {
-    alberti: 'Allegretto',
-    waltz: 'Tempo di Valse',
-    chorale: 'Andante religioso',
-    pop: 'Moderato'
-  };
+  // Find peak energy measure for climax dynamic
+  let climaxIdx = Math.floor(totalMeasures * 0.65);
+  let maxEnergy = -1;
+  blueprints.forEach((bp, idx) => {
+    if (bp.energy > maxEnergy && idx < totalMeasures - 1) {
+      maxEnergy = bp.energy;
+      climaxIdx = idx;
+    }
+  });
+
+  const useLyricalPhraseSlurs =
+    styleRealizer.id !== 'baroque' && styleRealizer.id !== 'blues';
+
+  // Track whether a phrase slur is currently open so every slurStart has a matching slurStop
+  let slurOpen = false;
 
   return measures.map((m, idx) => {
-    const updated = { ...m };
+    const bp = blueprints[idx];
+    const trebleNotes = m.trebleNotes.map(n => ({ ...n }));
+    const bassNotes = m.bassNotes.map(n => ({ ...n }));
+    const updated: MeasureData = { ...m, trebleNotes, bassNotes };
 
-    // Tempo mark on measure 1
+    // Opening tempo & dynamic
     if (idx === 0) {
-      updated.tempoMarker = tempoTexts[style] || 'Moderato';
-      updated.dynamicMarker = 'mp';
+      updated.tempoMarker = styleRealizer.tempoText;
+      updated.dynamicMarker = styleRealizer.id === 'blues' ? 'mf' : 'mp';
     }
 
-    // Dynamic climax around 3/4 through the piece
-    const climaxBar = Math.floor(totalMeasures * 0.7);
-    if (idx === climaxBar - 1) {
+    // Form-driven dynamic arc
+    if (idx === climaxIdx - 1 && idx > 0) {
       updated.dynamicMarker = 'crescendo';
-    } else if (idx === climaxBar) {
+    } else if (idx === climaxIdx && idx > 0) {
       updated.wedgeStop = true;
-      updated.dynamicMarker = 'f';
-    } else if (idx === totalMeasures - 1) {
-      updated.dynamicMarker = 'p';
+      updated.dynamicMarker = styleRealizer.id === 'chorale' ? 'mf' : 'f';
+    } else if (idx === totalMeasures - 2 && idx > climaxIdx) {
+      updated.dynamicMarker = 'diminuendo';
+    } else if (idx === totalMeasures - 1 && idx > climaxIdx) {
+      updated.wedgeStop = idx === totalMeasures - 1 && totalMeasures - 2 > climaxIdx;
+      updated.dynamicMarker = styleRealizer.id === 'blues' ? 'mf' : 'mp';
     }
 
-    // Apply slur markers to Right Hand notes in 2-bar or 4-bar phrases
-    if (updated.trebleNotes && updated.trebleNotes.length > 0) {
-      const phrasePos = idx % 4;
-      if (phrasePos === 0) {
-        // Start slur on first note
-        updated.trebleNotes[0] = { ...updated.trebleNotes[0], slurStart: true };
+    // Rest-aware phrase slurs for lyrical/classical/waltz/pop/chorale styles
+    if (useLyricalPhraseSlurs && trebleNotes.length > 0) {
+      const firstSound = findFirstSoundingIndex(trebleNotes);
+      const lastSound = findLastSoundingIndex(trebleNotes);
+
+      if (bp.phrasePos === 0 && !slurOpen && firstSound !== -1) {
+        trebleNotes[firstSound] = { ...trebleNotes[firstSound], slurStart: true };
+        slurOpen = true;
       }
-      if (phrasePos === 3 || idx === totalMeasures - 1) {
-        // End slur on last note
-        const lastIdx = updated.trebleNotes.length - 1;
-        updated.trebleNotes[lastIdx] = { ...updated.trebleNotes[lastIdx], slurStop: true };
+
+      if ((bp.phrasePos === 3 || bp.isFinal) && slurOpen && lastSound !== -1) {
+        // Avoid degenerate slur starting and ending on the exact same single note
+        if (!(trebleNotes[lastSound].slurStart && lastSound === firstSound)) {
+          trebleNotes[lastSound] = { ...trebleNotes[lastSound], slurStop: true };
+        } else {
+          trebleNotes[lastSound] = { ...trebleNotes[lastSound], slurStart: false };
+        }
+        slurOpen = false;
       }
     }
 
