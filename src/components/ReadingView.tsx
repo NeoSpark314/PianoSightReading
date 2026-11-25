@@ -392,13 +392,7 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
         </button>
 
         <span
-          style={{
-            fontSize: '0.85rem',
-            fontWeight: 600,
-            color: '#f8fafc',
-            padding: '0 0.25rem',
-            whiteSpace: 'nowrap'
-          }}
+          className="reading-bar-meta"
           title={currentPieceResult.piece.pedagogicalTags.join(' · ')}
         >
           #{historyIndex + 1} · {currentPieceResult.piece.keyName} · L{currentPieceResult.piece.difficulty}
