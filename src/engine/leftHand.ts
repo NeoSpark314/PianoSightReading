@@ -1,4 +1,13 @@
-import { NoteData, HarmonicMeasure, StyleType, NotePitch } from './types';
+import { NoteData, NoteDuration, HarmonicMeasure, StyleType, NotePitch } from './types';
+import { DURATION_SPECS } from './durationUtils';
+
+function makeNote(pitch: NotePitch, duration: NoteDuration): NoteData {
+  return {
+    pitch,
+    duration,
+    durationInQuarterNotes: DURATION_SPECS[duration].quarterBeats
+  };
+}
 
 // Helper to construct a LH pitch in a specific bass octave (usually Octave 2 or 3)
 function getVoicedLHPitches(chordPitches: NotePitch[], targetBassOctave: number = 3): NotePitch[] {
@@ -34,100 +43,44 @@ export function generateLeftHandMeasure(
 
   // If final measure, play a solid whole note or dotted half note resolving to Root
   if (isFinalMeasure) {
-    if (style === 'waltz') {
-      return [{
-        pitch: root,
-        duration: 'dotted-half',
-        durationInQuarterNotes: 3.0
-      }];
-    } else {
-      return [{
-        pitch: root,
-        duration: 'whole',
-        durationInQuarterNotes: 4.0
-      }];
-    }
+    return [makeNote(root, style === 'waltz' ? 'dotted-half' : 'whole')];
   }
 
   switch (style) {
     case 'alberti': {
       // Alberti Bass: Root - 5th - 3rd - 5th (8th notes across 4 beats = 8 notes)
       const patternPitches = [root, fifth, third, fifth, root, fifth, third, fifth];
-      return patternPitches.map((p) => ({
-        pitch: p,
-        duration: 'eighth',
-        durationInQuarterNotes: 0.5
-      }));
+      return patternPitches.map((p) => makeNote(p, 'eighth'));
     }
 
     case 'waltz': {
-      // 3/4 Time: Beat 1 = Root note, Beat 2 = blocked chord (3rd + 5th), Beat 3 = blocked chord
+      // 3/4 Time: Beat 1 = Root note, Beat 2 = 3rd, Beat 3 = 3rd
       return [
-        {
-          pitch: root,
-          duration: 'quarter',
-          durationInQuarterNotes: 1.0
-        },
-        {
-          pitch: third,
-          duration: 'quarter',
-          durationInQuarterNotes: 1.0
-        },
-        {
-          pitch: third,
-          duration: 'quarter',
-          durationInQuarterNotes: 1.0
-        }
+        makeNote(root, 'quarter'),
+        makeNote(third, 'quarter'),
+        makeNote(third, 'quarter')
       ];
     }
 
     case 'chorale': {
-      // 4/4 Time: 2 Half notes or 4 Quarter notes with smooth voice leading
+      // 4/4 Time: 2 Half notes with smooth voice leading
       return [
-        {
-          pitch: root,
-          duration: 'half',
-          durationInQuarterNotes: 2.0
-        },
-        {
-          pitch: fifth,
-          duration: 'half',
-          durationInQuarterNotes: 2.0
-        }
+        makeNote(root, 'half'),
+        makeNote(fifth, 'half')
       ];
     }
 
     case 'pop': {
       // 4/4 Time: Syncopated rhythm (Dotted quarter root, 8th 5th, quarter root, quarter 3rd)
       return [
-        {
-          pitch: root,
-          duration: 'dotted-quarter',
-          durationInQuarterNotes: 1.5
-        },
-        {
-          pitch: fifth,
-          duration: 'eighth',
-          durationInQuarterNotes: 0.5
-        },
-        {
-          pitch: root,
-          duration: 'quarter',
-          durationInQuarterNotes: 1.0
-        },
-        {
-          pitch: third,
-          duration: 'quarter',
-          durationInQuarterNotes: 1.0
-        }
+        makeNote(root, 'dotted-quarter'),
+        makeNote(fifth, 'eighth'),
+        makeNote(root, 'quarter'),
+        makeNote(third, 'quarter')
       ];
     }
 
     default:
-      return [{
-        pitch: root,
-        duration: 'whole',
-        durationInQuarterNotes: 4.0
-      }];
+      return [makeNote(root, 'whole')];
   }
 }

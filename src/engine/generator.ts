@@ -5,6 +5,7 @@ import { generateLeftHandMeasure } from './leftHand';
 import { generateRightHandMeasure, selectPhraseMotif } from './rightHand';
 import { applyExpressiveMarkers } from './expressive';
 import { compileMusicXml } from './musicXmlCompiler';
+import { assertMeasureDuration } from './durationUtils';
 
 export interface GeneratedResult {
   piece: MusicPiece;
@@ -67,6 +68,9 @@ export function generateSightReadingPiece(config: GenerationConfig): GeneratedRe
       isFinal,
       activePhraseMotif
     );
+
+    assertMeasureDuration(bassNotes, timeSignature, `measure ${i + 1} bass (${style})`);
+    assertMeasureDuration(trebleNotes, timeSignature, `measure ${i + 1} treble (${style})`);
 
     if (trebleNotes.length > 0) {
       prevTrebleNote = trebleNotes[trebleNotes.length - 1];

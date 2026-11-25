@@ -1,6 +1,5 @@
-import { MusicPiece, NoteData, NoteDuration } from './types';
-
-const DIVISIONS = 4; // 4 divisions per quarter note
+import { MusicPiece, NoteData } from './types';
+import { DIVISIONS_PER_QUARTER, DURATION_SPECS } from './durationUtils';
 
 function escapeXml(str: string): string {
   return str
@@ -9,25 +8,6 @@ function escapeXml(str: string): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&apos;');
-}
-
-function durationToDivisionsAndType(duration: NoteDuration): { divisions: number; typeStr: string; hasDot: boolean } {
-  switch (duration) {
-    case 'whole':
-      return { divisions: 16, typeStr: 'whole', hasDot: false };
-    case 'dotted-half':
-      return { divisions: 12, typeStr: 'half', hasDot: true };
-    case 'half':
-      return { divisions: 8, typeStr: 'half', hasDot: false };
-    case 'dotted-quarter':
-      return { divisions: 6, typeStr: 'quarter', hasDot: true };
-    case 'quarter':
-      return { divisions: 4, typeStr: 'quarter', hasDot: false };
-    case 'eighth':
-      return { divisions: 2, typeStr: 'eighth', hasDot: false };
-    case 'sixteenth':
-      return { divisions: 1, typeStr: 'sixteenth', hasDot: false };
-  }
 }
 
 /**
@@ -98,7 +78,7 @@ function applyAutomaticBeaming(rawNotes: NoteData[], timeBeats: number): NoteDat
 }
 
 function compileNoteXml(note: NoteData, voice: number, staff: number): string {
-  const { divisions, typeStr, hasDot } = durationToDivisionsAndType(note.duration);
+  const { divisions, xmlType, hasDot } = DURATION_SPECS[note.duration];
 
   let xml = '      <note>\n';
 
@@ -116,7 +96,7 @@ function compileNoteXml(note: NoteData, voice: number, staff: number): string {
 
   xml += `        <duration>${divisions}</duration>\n`;
   xml += `        <voice>${voice}</voice>\n`;
-  xml += `        <type>${typeStr}</type>\n`;
+  xml += `        <type>${xmlType}</type>\n`;
   if (hasDot) {
     xml += '        <dot/>\n';
   }
@@ -175,7 +155,7 @@ export function compileMusicXml(piece: MusicPiece): string {
     // Measure attributes (First measure setup)
     if (isFirst) {
       xml += '      <attributes>\n';
-      xml += `        <divisions>${DIVISIONS}</divisions>\n`;
+      xml += `        <divisions>${DIVISIONS_PER_QUARTER}</divisions>\n`;
       xml += '        <key>\n';
       xml += `          <fifths>${piece.keyFifths}</fifths>\n`;
       xml += '        </key>\n';
@@ -195,23 +175,27 @@ export function compileMusicXml(piece: MusicPiece): string {
       xml += '      </attributes>\n';
     }
 
-    // Tempo & Metronome direction
-    if (measure.tempoMarker || isFirst) {
+    // Tempo expression text (e.g. "Tempo di Valse", "Allegretto")
+    if (measure.tempoMarker) {
       xml += '      <direction placement="above">\n';
-      if (measure.tempoMarker) {
-        xml += '        <direction-type>\n';
-        xml += `          <words font-weight="bold">${escapeXml(measure.tempoMarker)}</words>\n`;
-        xml += '        </direction-type>\n';
-      }
-      if (isFirst && piece.tempo) {
-        xml += '        <direction-type>\n';
-        xml += '          <metronome parentheses="yes">\n';
-        xml += '            <beat-unit>quarter</beat-unit>\n';
-        xml += `            <per-minute>${piece.tempo}</per-minute>\n`;
-        xml += '          </metronome>\n';
-        xml += '        </direction-type>\n';
-      }
+      xml += '        <direction-type>\n';
+      xml += `          <words font-weight="bold">${escapeXml(measure.tempoMarker)}</words>\n`;
+      xml += '        </direction-type>\n';
       xml += '        <staff>1</staff>\n';
+      xml += '      </direction>\n';
+    }
+
+    // Metronome mark on the opening measure (stacked cleanly above tempo text via OSMD EngravingRules)
+    if (isFirst && piece.tempo) {
+      xml += '      <direction placement="above">\n';
+      xml += '        <direction-type>\n';
+      xml += '          <metronome parentheses="yes">\n';
+      xml += '            <beat-unit>quarter</beat-unit>\n';
+      xml += `            <per-minute>${piece.tempo}</per-minute>\n`;
+      xml += '          </metronome>\n';
+      xml += '        </direction-type>\n';
+      xml += '        <staff>1</staff>\n';
+      xml += `        <sound tempo="${piece.tempo}"/>\n`;
       xml += '      </direction>\n';
     }
 
@@ -252,7 +236,7 @@ export function compileMusicXml(piece: MusicPiece): string {
     // Treble Notes (Voice 1, Staff 1)
     let trebleTotalDivisions = 0;
     beamedTrebleNotes.forEach((n) => {
-      const { divisions } = durationToDivisionsAndType(n.duration);
+      const { divisions } = DURATION_SPECS[n.duration];
       trebleTotalDivisions += divisions;
       xml += compileNoteXml(n, 1, 1);
     });

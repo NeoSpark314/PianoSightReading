@@ -139,6 +139,10 @@ export const ReadingView: React.FC<ReadingViewProps> = ({
     rules.MinNoteDistance = 2.2;
     rules.StretchLastSystemLine = false;
     rules.LastSystemMaxScalingFactor = 1.4;
+    rules.RenderMeasureNumbersOnlyAtSystemStart = true;
+    rules.MetronomeMarkXShift = 0;
+    rules.MetronomeMarkYShift = -3.2;
+    rules.TempoYSpacing = 1.5;
 
     osmdInstanceRef.current = osmd;
 

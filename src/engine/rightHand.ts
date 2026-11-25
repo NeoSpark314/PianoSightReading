@@ -1,5 +1,6 @@
 import { NoteData, HarmonicMeasure, StyleType, NotePitch, NoteDuration } from './types';
 import { pitchToMidi, stepOffsetToPitch } from './pitchUtils';
+import { DURATION_SPECS } from './durationUtils';
 
 export function selectPhraseMotif(style: StyleType): NoteDuration[] {
   if (style === 'waltz') {
@@ -7,7 +8,7 @@ export function selectPhraseMotif(style: StyleType): NoteDuration[] {
       ['quarter', 'quarter', 'quarter'],
       ['quarter', 'eighth', 'eighth', 'quarter'],
       ['dotted-quarter', 'eighth', 'quarter'],
-      ['quarter', 'sixteenth', 'sixteenth', 'sixteenth', 'sixteenth']
+      ['quarter', 'sixteenth', 'sixteenth', 'sixteenth', 'sixteenth', 'quarter']
     ];
     return waltzMotifs[Math.floor(Math.random() * waltzMotifs.length)];
   } else {
@@ -90,12 +91,7 @@ export function generateRightHandMeasure(
 
   for (let i = 0; i < selectedTemplate.length; i++) {
     const duration = selectedTemplate[i];
-    const durQuarterValue = duration === 'whole' ? 4.0 :
-                            duration === 'dotted-half' ? 3.0 :
-                            duration === 'half' ? 2.0 :
-                            duration === 'dotted-quarter' ? 1.5 :
-                            duration === 'quarter' ? 1.0 :
-                            duration === 'eighth' ? 0.5 : 0.25;
+    const durQuarterValue = DURATION_SPECS[duration].quarterBeats;
 
     const isStrongBeat = (currentBeatOffset % 1.0 === 0) || (i === 0);
 
