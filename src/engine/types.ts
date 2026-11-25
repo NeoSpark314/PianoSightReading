@@ -60,6 +60,7 @@ export interface MeasureData {
   bassNotes: NoteData[];
   timeSignature?: TimeSignature;
   dynamicMarker?: string; // e.g. 'p', 'crescendo', 'f'
+  wedgeStop?: boolean; // Closes an active crescendo/diminuendo hairpin
   tempoMarker?: string; // e.g. 'Allegretto', 'Andante'
   systemBreak?: boolean;
 }

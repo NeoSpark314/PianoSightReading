@@ -193,8 +193,8 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
       </main>
 
       {/* Footer Info */}
-      <footer style={{ marginTop: '2rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.875rem' }}>
-        <p>Tip: On tablet, tap the right half of the screen to generate the next piece, or left half to review.</p>
+      <footer style={{ marginTop: '2rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.875rem', maxWidth: '480px' }}>
+        <p>Tip: Tap the right/left edges (or swipe) to turn pieces, and tap the center of the page to show or hide controls.</p>
       </footer>
     </div>
   );

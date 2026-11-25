@@ -2,6 +2,15 @@ import { MusicPiece, NoteData, NoteDuration } from './types';
 
 const DIVISIONS = 4; // 4 divisions per quarter note
 
+function escapeXml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
 function durationToDivisionsAndType(duration: NoteDuration): { divisions: number; typeStr: string; hasDot: boolean } {
   switch (duration) {
     case 'whole':
@@ -139,10 +148,10 @@ export function compileMusicXml(piece: MusicPiece): string {
   
   // Work Header
   xml += '  <work>\n';
-  xml += `    <work-title>${piece.title}</work-title>\n`;
+  xml += `    <work-title>${escapeXml(piece.title)}</work-title>\n`;
   xml += '  </work>\n';
   xml += '  <identification>\n';
-  xml += `    <creator type="composer">${piece.composer}</creator>\n`;
+  xml += `    <creator type="composer">${escapeXml(piece.composer)}</creator>\n`;
   xml += '  </identification>\n';
 
   // Part List
@@ -156,9 +165,11 @@ export function compileMusicXml(piece: MusicPiece): string {
   xml += '  <part id="P1">\n';
 
   const timeBeats = piece.timeSignature.beats;
+  const totalMeasures = piece.measures.length;
 
   piece.measures.forEach((measure, idx) => {
     const isFirst = idx === 0;
+    const isLast = idx === totalMeasures - 1;
     xml += `    <measure number="${measure.measureNumber}">\n`;
 
     // Measure attributes (First measure setup)
@@ -184,22 +195,44 @@ export function compileMusicXml(piece: MusicPiece): string {
       xml += '      </attributes>\n';
     }
 
-    // Tempo mark direction
-    if (measure.tempoMarker) {
+    // Tempo & Metronome direction
+    if (measure.tempoMarker || isFirst) {
       xml += '      <direction placement="above">\n';
-      xml += '        <direction-type>\n';
-      xml += `          <words font-weight="bold">${measure.tempoMarker}</words>\n`;
-      xml += '        </direction-type>\n';
+      if (measure.tempoMarker) {
+        xml += '        <direction-type>\n';
+        xml += `          <words font-weight="bold">${escapeXml(measure.tempoMarker)}</words>\n`;
+        xml += '        </direction-type>\n';
+      }
+      if (isFirst && piece.tempo) {
+        xml += '        <direction-type>\n';
+        xml += '          <metronome parentheses="yes">\n';
+        xml += '            <beat-unit>quarter</beat-unit>\n';
+        xml += `            <per-minute>${piece.tempo}</per-minute>\n`;
+        xml += '          </metronome>\n';
+        xml += '        </direction-type>\n';
+      }
+      xml += '        <staff>1</staff>\n';
       xml += '      </direction>\n';
     }
 
-    // Dynamic marker direction
+    // Close active hairpin wedge before new dynamic
+    if (measure.wedgeStop) {
+      xml += '      <direction placement="below">\n';
+      xml += '        <direction-type>\n';
+      xml += '          <wedge type="stop"/>\n';
+      xml += '        </direction-type>\n';
+      xml += '        <staff>1</staff>\n';
+      xml += '      </direction>\n';
+    }
+
+    // Dynamic marker direction (placed between grand staves via staff 1 below)
     if (measure.dynamicMarker) {
       if (measure.dynamicMarker === 'crescendo') {
         xml += '      <direction placement="below">\n';
         xml += '        <direction-type>\n';
         xml += '          <wedge type="crescendo"/>\n';
         xml += '        </direction-type>\n';
+        xml += '        <staff>1</staff>\n';
         xml += '      </direction>\n';
       } else {
         xml += '      <direction placement="below">\n';
@@ -208,6 +241,7 @@ export function compileMusicXml(piece: MusicPiece): string {
         xml += `            <${measure.dynamicMarker}/>\n`;
         xml += '          </dynamics>\n';
         xml += '        </direction-type>\n';
+        xml += '        <staff>1</staff>\n';
         xml += '      </direction>\n';
       }
     }
@@ -233,6 +267,13 @@ export function compileMusicXml(piece: MusicPiece): string {
     beamedBassNotes.forEach((n) => {
       xml += compileNoteXml(n, 2, 2);
     });
+
+    // Final double barline on last measure
+    if (isLast) {
+      xml += '      <barline location="right">\n';
+      xml += '        <bar-style>light-heavy</bar-style>\n';
+      xml += '      </barline>\n';
+    }
 
     xml += '    </measure>\n';
   });

@@ -28,6 +28,7 @@ export function applyExpressiveMarkers(
     if (idx === climaxBar - 1) {
       updated.dynamicMarker = 'crescendo';
     } else if (idx === climaxBar) {
+      updated.wedgeStop = true;
       updated.dynamicMarker = 'f';
     } else if (idx === totalMeasures - 1) {
       updated.dynamicMarker = 'p';
